@@ -42,13 +42,13 @@ basicAnimate();
 // Load GLTF Model
 let model;
 const loader = new THREE.GLTFLoader();
-loader.load("/models/black_chair.glb", function (gltf) {
+loader.load("/assets/black_chair.glb", function (gltf) {
   model = gltf.scene;
   model.traverse((node) => {
     if (node.isMesh && node.material) {
-      node.material.color.set("#05172F");
-      node.material.metalness = 0.3;
-      node.material.roughness = 0.8;
+      node.material.color.set("#1e3a8a");
+      node.material.metalness = 0.5;
+      node.material.roughness = 0.9;
       node.material.envMapIntensity = 2;
       node.castShadow = true;
       node.receiveShadow = true;
