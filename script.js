@@ -23,32 +23,36 @@ document.querySelector(".model").appendChild(renderer.domElement);
 // Lights
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
 scene.add(ambientLight);
+
 const mainLight = new THREE.DirectionalLight(0xffffff, 7.5);
 mainLight.position.set(0.5, 7.5, 2.5);
 scene.add(mainLight);
+
 const fillLight = new THREE.DirectionalLight(0xffffff, 2.5);
 fillLight.position.set(-15, 0, -5);
 scene.add(fillLight);
+
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 1.5);
 scene.add(hemiLight);
 
-// Initial Render
+// Initial Render Loop (stopped after model loads)
+let basicAnimateId;
 function basicAnimate() {
   renderer.render(scene, camera);
-  requestAnimationFrame(basicAnimate);
+  basicAnimateId = requestAnimationFrame(basicAnimate);
 }
 basicAnimate();
 
 // Load GLTF Model
 let model;
 const loader = new THREE.GLTFLoader();
-loader.load("/assets/black_chair.glb", function (gltf) {
+loader.load("/assets2/black_chair.glb", function (gltf) {
   model = gltf.scene;
   model.traverse((node) => {
     if (node.isMesh && node.material) {
-      node.material.color.set("#1e3a8a");
-      node.material.metalness = 0.5;
-      node.material.roughness = 0.9;
+      node.material.color.set("#FFFFF0");
+      node.material.metalness = 0.4;
+      node.material.roughness = 1;
       node.material.envMapIntensity = 2;
       node.castShadow = true;
       node.receiveShadow = true;
@@ -62,22 +66,18 @@ loader.load("/assets/black_chair.glb", function (gltf) {
 
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  camera.position.z = maxDim * 1.75;
+  camera.position.set(0, 1, maxDim * 1.75);
+  camera.lookAt(0, 0, 0);
 
   model.scale.set(0, 0, 0);
   model.rotation.set(0, 0.5, 0);
   playInitialAnimation();
 
-  cancelAnimationFrame(basicAnimate);
+  cancelAnimationFrame(basicAnimateId);
   animate();
 });
 
-// Scroll tracking
-let currentScroll = 0;
-const totalScrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-const floatAmplitude = 0.2;
-const floatSpeed = 1.5;
-
+// Initial Scale Animation
 function playInitialAnimation() {
   if (model) {
     gsap.to(model.scale, {
@@ -90,11 +90,24 @@ function playInitialAnimation() {
   }
 }
 
+// Scroll Tracking
+let currentScroll = 0;
+const totalScrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+const floatAmplitude = 0.2;
+const floatSpeed = 1.5;
+let lastScroll = 0;
+let autoRotate = true;
+
 lenis.on("scroll", (e) => {
   currentScroll = e.scroll;
+  if (Math.abs(e.scroll - lastScroll) > 5) {
+    autoRotate = false;
+    setTimeout(() => (autoRotate = true), 2000);
+  }
+  lastScroll = e.scroll;
 });
 
-// Mouse Control
+// Mouse Drag Controls
 let isDragging = false;
 let previousMouseX = 0;
 let previousMouseY = 0;
@@ -127,7 +140,7 @@ document.addEventListener("mousemove", (event) => {
   previousMouseY = event.clientY;
 });
 
-// Animate Function
+// Main Animate Loop
 function animate() {
   if (model) {
     const floatOffset = Math.sin(Date.now() * 0.001 * floatSpeed) * floatAmplitude;
@@ -137,6 +150,9 @@ function animate() {
 
     if (!isDragging) {
       model.rotation.x = scrollProgress * Math.PI * 4 + 0.5;
+      if (autoRotate) {
+        model.rotation.y += 0.003;
+      }
     }
   }
 
@@ -144,7 +160,7 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-// Outro text animation
+// Outro Text Animation
 const splitText = new SplitType(".outro-copy h2", {
   types: "lines",
   lineClass: "line",
@@ -179,7 +195,7 @@ ScrollTrigger.create({
   toggleActions: "play reverse play reverse",
 });
 
-// 🎨 Color Palette Logic
+// Color Theme Switching
 document.querySelectorAll('.color-btn').forEach((btn) => {
   btn.style.backgroundColor = btn.getAttribute('data-bg');
 
@@ -196,5 +212,25 @@ document.querySelectorAll('.color-btn').forEach((btn) => {
     document.querySelectorAll('h1, h2, p, a').forEach(el => {
       el.style.color = textColor;
     });
+
+    // 🆕 Update model color on theme change
+    updateModelColor(textColor);
   });
+});
+
+// 🆕 Function to update model color
+function updateModelColor(color) {
+  if (!model) return;
+  model.traverse((node) => {
+    if (node.isMesh && node.material) {
+      node.material.color.setStyle(color);
+    }
+  });
+}
+
+// 🆕 Responsive resize handler
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
