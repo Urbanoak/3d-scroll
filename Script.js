@@ -1,5 +1,7 @@
 // LENIS Scroll + ScrollTrigger
-const lenis = new Lenis();
+const lenis = new Lenis({
+  smoothTouch: true, // Enable smooth scrolling on touch devices
+});
 lenis.on("scroll", ScrollTrigger.update);
 gsap.ticker.add((time) => {
   lenis.raf(time * 1000);
@@ -12,7 +14,7 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setClearColor(0x000000, 0);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for performance
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.physicallyCorrectLights = true;
@@ -66,8 +68,7 @@ loader.load("black_chair.glb", function (gltf) {
 
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  camera.position.set(0, 1, maxDim * 1.75);
-  camera.lookAt(0, 0, 0);
+  updateCameraPosition(); // Adjust camera for initial load
 
   model.scale.set(0, 0, 0);
   model.rotation.set(0, 0.5, 0);
@@ -92,7 +93,7 @@ function playInitialAnimation() {
 
 // Scroll Tracking
 let currentScroll = 0;
-const totalScrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+let totalScrollHeight = document.documentElement.scrollHeight - window.innerHeight;
 const floatAmplitude = 0.2;
 const floatSpeed = 1.5;
 let lastScroll = 0;
@@ -107,17 +108,18 @@ lenis.on("scroll", (e) => {
   lastScroll = e.scroll;
 });
 
-// Mouse Drag Controls
+// Mouse and Touch Drag Controls
 let isDragging = false;
-let previousMouseX = 0;
-let previousMouseY = 0;
+let previousX = 0;
+let previousY = 0;
 let rotationY = 0;
 let rotationX = 0;
 
+// Mouse Events
 document.addEventListener("mousedown", (event) => {
   isDragging = true;
-  previousMouseX = event.clientX;
-  previousMouseY = event.clientY;
+  previousX = event.clientX;
+  previousY = event.clientY;
 });
 
 document.addEventListener("mouseup", () => {
@@ -127,8 +129,8 @@ document.addEventListener("mouseup", () => {
 document.addEventListener("mousemove", (event) => {
   if (!isDragging || !model) return;
 
-  let deltaX = (event.clientX - previousMouseX) * 0.005;
-  let deltaY = (event.clientY - previousMouseY) * 0.005;
+  let deltaX = (event.clientX - previousX) * 0.005;
+  let deltaY = (event.clientY - previousY) * 0.005;
 
   rotationY += deltaX;
   rotationX += deltaY;
@@ -136,8 +138,35 @@ document.addEventListener("mousemove", (event) => {
   model.rotation.y = rotationY;
   model.rotation.x = rotationX;
 
-  previousMouseX = event.clientX;
-  previousMouseY = event.clientY;
+  previousX = event.clientX;
+  previousY = event.clientY;
+});
+
+// Touch Events for Mobile
+document.addEventListener("touchstart", (event) => {
+  isDragging = true;
+  previousX = event.touches[0].clientX;
+  previousY = event.touches[0].clientY;
+});
+
+document.addEventListener("touchend", () => {
+  isDragging = false;
+});
+
+document.addEventListener("touchmove", (event) => {
+  if (!isDragging || !model) return;
+
+  let deltaX = (event.touches[0].clientX - previousX) * 0.003; // Reduced sensitivity for touch
+  let deltaY = (event.touches[0].clientY - previousY) * 0.003;
+
+  rotationY += deltaX;
+  rotationX += deltaY;
+
+  model.rotation.y = rotationY;
+  model.rotation.x = rotationX;
+
+  previousX = event.touches[0].clientX;
+  previousY = event.touches[0].clientY;
 });
 
 // Main Animate Loop
@@ -213,12 +242,11 @@ document.querySelectorAll('.color-btn').forEach((btn) => {
       el.style.color = textColor;
     });
 
-    // 🆕 Update model color on theme change
     updateModelColor(textColor);
   });
 });
 
-// 🆕 Function to update model color
+// Function to update model color
 function updateModelColor(color) {
   if (!model) return;
   model.traverse((node) => {
@@ -228,9 +256,38 @@ function updateModelColor(color) {
   });
 }
 
-// 🆕 Responsive resize handler
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+// Responsive Camera Adjustment
+function updateCameraPosition() {
+  if (!model) return;
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  // Adjust camera distance based on screen size
+  const isMobile = window.innerWidth < 768;
+  const fov = isMobile ? 85 : 75; // Wider FOV for mobile
+  camera.fov = fov;
+  camera.position.set(0, isMobile ? 1.5 : 1, maxDim * (isMobile ? 1.5 : 1.75));
+  camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+}
+
+// Debounced Resize Handler
+let resizeTimeout;
+function handleResize() {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    totalScrollHeight = document.documentElement.scrollHeight - window.innerHeight; // Recalculate scroll height
+    updateCameraPosition(); // Adjust camera for new screen size
+  }, 100); // Debounce delay
+}
+
+window.addEventListener("resize", handleResize);
+window.addEventListener("orientationchange", handleResize); // Handle mobile orientation changes
+
+// Initial camera setup
+updateCameraPosition();
